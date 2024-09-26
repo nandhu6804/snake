@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+         
+      body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #191919;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background: linear-gradient(to right, #1e3c72, #2a5298);
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .container:hover {
+            transform: scale(1.05);
+        }
+        h1 {
+            margin-bottom: 30px;
+            font-size: 48px;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            margin-bottom: 10px;
+            font-size: 20px;
+            display: block;
+            color: #FFD700;
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: calc(100% - 30px);
+            padding: 15px;
+            margin-bottom: 20px;
+            border: none;
+            border-radius: 15px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 18px;
+            outline: none;
+        }
+        input[type="submit"] {
+            width: calc(100% - 30px);
+            padding: 15px;
+            border: none;
+            border-radius: 15px;
+            background-color: #FF6347;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        input[type="submit"]:hover {
+            background-color: #FF4500;
+        }
+        .btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background-color: #4CAF50;
+            color: #fff;
+            font-size: 20px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        #game-id {
+            margin-top: 20px;
+            font-size: 24px;
+            color: #FFD700;
+        }
+        canvas {
+            margin-top: 30px;
+            border: 4px solid #FFD700;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+
+        }
+    </style>
+</head>
+<body> 
+    <label  for="" title="user name shoud be uniquq">UserName</label>
+    <input id="user-input" type="text">
+    <label for="" >Password</label>
+    <input type="password" id="user-password">
+    <button type="submit" class="btn btn-primary" id="submit" >Submit</button>  
+  <br>
+    <button id="create-game-btn" class="btn btn-primary">Create Game</button>
+    <p id="game-id"></p>
+    <p>(or)</p>
+    <input id="join-game-id" type="text">
+    <button id="join-game-btn" class="btn btn-primary">Join</button><br>
+    <span>Score: </span>
+    <p id="score"></p>
+    <h1 style="text-align: center;">Snake</h1>
+    <div style="text-align: center;">
+        <canvas width="600px" height="400px"  style="overflow: hidden;">
+
+        </canvas>
+    </div>
+    <script>
+        let snakes = {}
+        let xdirection = 0;
+        let ydirection = 0;
+
+       //game rendering
+        let canvas = document.querySelector('canvas');
+        let c = canvas.getContext('2d');
+        const blockSize = 25;
+        const rows = 30;
+        const cols = 20;
+        
+
+        let gameover = false; 
+        
+
+        let score = document.getElementById("score");
+        let foodX = 0;
+        let foodY = 0;
+
+        let ws = null;
+        //connection to websocket
+        let clientId = null;
+        let password = null;
+        let gameId = null;
+        
+        //userName submit event
+        let button = document.getElementById("submit");
+         button.addEventListener("click", ()=>{
+            
+          ws = new WebSocket("ws://localhost:8081");
+            clientId = document.getElementById("user-input").value;
+            //password = document.getElementById("user-password").value;
+            const clientInfo = {
+                "method" : "connect",
+                "clientId" : clientId,
+                "password" : password
+            }
+            ws.onopen = ()=>{
+                ws.send(JSON.stringify(clientInfo));
+            };
+            console.log(clientInfo);
+
+
+            ws.onmessage = message => {
+                let response = JSON.parse(message.data);
+              
+                
+                if(response.method == "create"){
+                    console.log(`Game created with id ${response.game.gameId}`);
+                    let gameid = document.getElementById("game-id");
+                    gameid.textContent = response.game.gameId;
+                }
+
+                if(response.method == "join"){
+                    response.game.clients.forEach(client => {
+                        if(!snakes.hasOwnProperty(client.clinetId)){
+                        createSnake(client.clientId, client.color, client.x, client.y);
+                        }
+                        renderSnakes();
+                        
+                    })
+                    
+                }
+                
+                if(response.method == "update"){
+                    updateSnakeCoordinates(response.game);
+                    console.log(response.game);
+                    renderSnakes();    
+                   /* response.game.clients.forEach(client => {
+                        // Access the client ID
+                        const clientId = client.clientId;
+                        console.log('Client ID:', clientId);
+                    });*/
+                }
+
+                
+            }; 
+            
+        }, false);
+
+        function generateRandomFoodPosition() {
+            const numRows = 15; // Number of rows in the game grid1515
+            const numCols = 15; // Number of columns in the game grid
+        
+            const randomRow = Math.floor(Math.random() * numRows);
+            const randomCol = Math.floor(Math.random() * numCols);
+        
+            
+            foodX =  randomCol * 25, // Each column is 25 pixels wide
+                foodY = randomRow * 25  // Each row is 25 pixels tall
+        
+        
+            
+        }
+        //create game button and store result
+        let creatGame = document.getElementById("create-game-btn");
+        creatGame.addEventListener("click", ()=>{
+    
+            console.log(" game create button clicked ");
+            const payLoad = {
+               "method" : "create",
+               "clientId" : clientId 
+            }
+            
+            ws.send(JSON.stringify(payLoad));
+        }, false);
+
+        //join game 
+
+        let joinGame = document.getElementById("join-game-btn");
+        let joinGameId = document.getElementById("join-game-id");
+           
+        joinGame.addEventListener("click", () => {
+            gameId = joinGameId.value;
+
+            const payLoad = {
+                "method" : "join",
+                "clientId" : clientId,
+                "gameId" : gameId
+            }
+
+            ws.send(JSON.stringify(payLoad));
+        }, false);
+
+        // on trigerring event from client
+        document.addEventListener("keydown", (event)=>{
+
+             
+            switch(event.key){
+                case "ArrowUp":
+                if(ydirection != 25){  
+                    ydirection = -25;
+                   xdirection = 0;
+                   
+                 
+    
+                   
+          
+            console.log(xdirection)
+            console.log(ydirection)
+            
+                }
+                    break;
+
+                case "ArrowDown":
+                if(ydirection != -25){
+                    ydirection = 25;
+                    xdirection = 0; 
+                     
+                    
+                   
+                   
+            console.log(xdirection)
+            console.log(ydirection)
+
+                }
+                    break;
+
+                case "ArrowLeft":
+                if(xdirection != 25){
+                    ydirection = 0;
+                    xdirection = -25;
+                     
+                    
+            
+            console.log(xdirection)
+            console.log(ydirection)
+                }
+                    break;
+
+                case "ArrowRight":
+                if(xdirection != -25){
+                    ydirection = 0;
+                    xdirection = 25;
+                     
+                     
+                    
+                }
+                 break;
+              
+               
+               } 
+               const payLoad = {
+                "method" : "play",
+                "clientId" : clientId,
+                "gameId" : gameId,
+                "xdirection" :  xdirection,
+                "ydirection" : ydirection,
+                "x" : snakes[clientId].x,
+                "y" : snakes[clientId].y
+            } 
+            ws.send(JSON.stringify(payLoad));
+                
+            
+            /*function update(){
+                c.fillStyle = "green";
+                c.fillRect(snakes[clientId].x + xdirection, snakes[clientId].y + ydirection, blockSize, blockSize);
+                snakes[clinetId].x = snakes[clientId].x + xdirection;
+                snakes[clinetId].y = snakes[clientId].y + ydirection;
+                
+            } */
+            
+
+            
+
+            
+        }, false);
+        //function to create a new snake
+        function createSnake(clientId, snake_color, x_pos, y_pos) {
+            snakes[clientId] = {
+                name: clientId,
+                x : x_pos,
+                y: y_pos,
+                xdirection : 0,
+                ydirection : 0,
+                body: [],
+                color: snake_color,
+                score: 0,
+              
+            };
+        }
+        
+        generateRandomFoodPosition();
+
+        function renderSnakes(){
+            c.fillStyle = "black";
+            c.fillRect(0, 0, rows*blockSize, cols*blockSize);
+
+            c.fillStyle = "red";
+            c.fillRect(foodX, foodY, blockSize, blockSize);
+
+            for (let clientId in snakes) {
+               // c.fillStyle = "black";
+                let snake = snakes[clientId];
+                c.fillStyle = snake.color;
+                c.fillRect(snake.x , snake.y, blockSize, blockSize);
+
+                if(snake.x < 0 || snake.x > rows * 25 || snake.y < 0 || snake.y > cols * 25){
+                    alert("game over");
+                    return;
+                }
+                
+
+                if(snake.x == foodX && snake.y == foodY){
+                    snake.body.push([foodX, foodY]);
+                    snake.score = snake.score+1;
+                    document.getElementById("score").textContent = snake.score;
+                     generateRandomFoodPosition();
+    
+                    console.log(snake.body);
+                }
+
+                c.fillStyle='white';
+                c.fillText(snake.name,snake.x, snake.y- 10)
+                c.font='20px sans-serief';
+             for(let i = snake.body.length - 1; i > 0; i--){
+            snake.body[i] = snake.body[i-1];
+            
+        }
+        if(snake.body.length){
+            snake.body[0] = [snake.x, snake.y];
+        }
+        c.fillStyle = snake.color;
+        for(let i = 0; i < snake.body.length; i++){
+            c.fillRect(snake.body[i][0], snake.body[i][1], blockSize, blockSize);
+            
+
+
+        
+          const payLoad = {
+              "method" : "update",
+              "clientId" : clientId,
+              "gameId" : gameId,
+                    "x" : snake.x,
+                    "y" : snake.y
+                }
+                
+                ws.send(JSON.stringify(payLoad));
+                
+                
+                // Adjusted position for text
+                //for (let i = 0; i < snake.body.length; i++) {
+                    //  c.fillRect(snake.body[i].x , snake.body[i].y, blockSize, blockSize);
+                    //} 
+                }
+            }
+        }
+           
+       
+
+
+
+           
+// Start the animation loop
+
+
+//update movements
+
+        function updateSnakeCoordinates(game) {
+            // Iterate over the clients array in the game object
+            game.clients.forEach(client => {
+                const clientId = client.clientId;
+                const x = client.x;
+                const y = client.y;
+        
+                // Check if the snake with the given clientId exists in the snakes object
+                 
+                    // Update the x and y coordinates for the specific snake
+                    snakes[clientId].x = x + client.xdirection ;
+                    snakes[clientId].y = y + client.ydirection;
+                    console.log(`Snake coordinates updated for snake ${clientId}. x: ${snakes[clientId].x}, y: ${snakes[clientId].y}`);
+                    
+                
+                //update snake coordinates to server
+                // Handle the case where the snake with the given clientId is not found
+                
+                
+            });
+        
+
+        }
+
+        
+        
+        
+        
+
+        //render snake
+
+
+     //create Game
+
+        //game logic  
+       
+            // snake coordinates
+          
+
+
+    </script>
+ </body>
+</html>

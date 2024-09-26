@@ -1,0 +1,21 @@
+{
+  "95fe3ec5-f9cf-4bf8-2759-8fa9f7deb122": {
+    "gameId": "95fe3ec5-f9cf-4bf8-2759-8fa9f7deb122",
+    "clients": [
+      {
+        "clientId": "new",
+        "color": "rgba(201, 96, 52, 0.24)",
+        "x": 275,
+        "y": 275,
+        "xdirection": 0,
+        "ydirection": -25
+      },
+      {
+        "clientId": "saran",
+        "color": "rgba(46, 184, 78, 0.73)",
+        "x": 200,
+        "y": 325
+      }
+    ]
+  }
+}

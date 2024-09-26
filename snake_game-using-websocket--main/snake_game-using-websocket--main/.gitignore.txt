@@ -1,0 +1,3 @@
+package.json/
+games.json
+node_modules/
